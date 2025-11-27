@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/tie-breaker", "destination": "/index.html" },
+    { "source": "/tie-breaker/(.*)", "destination": "/$1" }
+  ]
+}

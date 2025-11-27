@@ -4,5 +4,6 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/tie-breaker/', // This sets your app to live at this specific subpath
+  base: '/tie-breaker/', // Keeps the asset links correct
+  // We removed the 'build' block to let Vercel handle the output normally
 })
