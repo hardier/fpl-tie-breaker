@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Shield, Goal, AlertCircle, RefreshCw, Coins, ArrowRight, CheckCircle2, Download, Search, Loader2, ExternalLink, ChevronDown, ChevronUp, User, Plus, Trash2 } from 'lucide-react';
+import { Trophy, Shield, Goal, AlertCircle, RefreshCw, Coins, ArrowRight, CheckCircle2, Download, Search, Loader2, ExternalLink, ChevronDown, ChevronUp, User, Plus, Trash2, Banknote } from 'lucide-react';
 
 export default function FplTieBreaker() {
   // Initialize state from LocalStorage if available
@@ -8,15 +8,20 @@ export default function FplTieBreaker() {
       const savedTeams = localStorage.getItem('fpl_tie_breaker_teams');
       if (savedTeams) {
         try {
-          return JSON.parse(savedTeams);
+          // Merge saved data with default structure to handle new fields like 'value'
+          const parsed = JSON.parse(savedTeams);
+          return parsed.map(t => ({
+            value: '', // Ensure value exists for old saves
+            ...t
+          }));
         } catch (e) {
           console.error("Failed to parse saved teams", e);
         }
       }
     }
     return [
-      { id: '', name: 'Team 1', score: '', goals: '', conceded: '', scorers: [], conceders: [] },
-      { id: '', name: 'Team 2', score: '', goals: '', conceded: '', scorers: [], conceders: [] }
+      { id: '', name: 'Team 1', score: '', goals: '', conceded: '', value: '', scorers: [], conceders: [] },
+      { id: '', name: 'Team 2', score: '', goals: '', conceded: '', value: '', scorers: [], conceders: [] }
     ];
   });
 
@@ -33,10 +38,8 @@ export default function FplTieBreaker() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
-  // Store static data to map Player IDs to Names
   const [staticData, setStaticData] = useState(null);
 
-  // Persistence Effect: Save data whenever it changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('fpl_tie_breaker_teams', JSON.stringify(teams));
@@ -44,7 +47,6 @@ export default function FplTieBreaker() {
     }
   }, [teams, gameweek]);
 
-  // Fetch Bootstrap Static on mount for player names
   useEffect(() => {
     const fetchStatic = async () => {
       try {
@@ -63,7 +65,6 @@ export default function FplTieBreaker() {
 
   // --- Core Tie Breaker Logic ---
   const calculateWinner = () => {
-    // 1. Parse inputs safely
     const parsedTeams = teams.map((t, idx) => ({
       ...t,
       originalIndex: idx,
@@ -72,18 +73,17 @@ export default function FplTieBreaker() {
       concededNum: Number(t.conceded) || 0
     }));
 
-    // Helper to check if inputs are sufficient to run logic
     const hasInputs = parsedTeams.some(t => t.score !== '');
     if (!hasInputs) {
       setAnalysis(null);
       return;
     }
 
-    // --- Step 1: Score ---
+    // Step 1: Score
     const maxScore = Math.max(...parsedTeams.map(t => t.scoreNum));
     const step1Survivors = parsedTeams.filter(t => t.scoreNum === maxScore);
 
-    // --- Step 2: Goals Scored ---
+    // Step 2: Goals Scored
     let step2Survivors = step1Survivors;
     let maxGoals = 0;
     if (step1Survivors.length > 1) {
@@ -91,7 +91,7 @@ export default function FplTieBreaker() {
       step2Survivors = step1Survivors.filter(t => t.goalsNum === maxGoals);
     }
 
-    // --- Step 3: Goals Conceded ---
+    // Step 3: Goals Conceded
     let step3Survivors = step2Survivors;
     let minConceded = 0;
     if (step2Survivors.length > 1) {
@@ -99,7 +99,7 @@ export default function FplTieBreaker() {
       step3Survivors = step2Survivors.filter(t => t.concededNum === minConceded);
     }
 
-    // --- Step 4: Coin Toss ---
+    // Step 4: Coin Toss
     let finalWinner = null;
     let winReason = '';
     let winningStep = 0;
@@ -117,16 +117,12 @@ export default function FplTieBreaker() {
         winReason = 'Fewer Goals Conceded';
         winningStep = 3;
     } else {
-        // Tie
         if (coinWinnerIndex !== null) {
-            // Ensure the coin winner is actually one of the survivors
             const stillValid = step3Survivors.find(t => t.originalIndex === coinWinnerIndex);
             if (stillValid) {
                 finalWinner = stillValid;
                 winReason = 'Virtual Coin Toss';
                 winningStep = 4;
-            } else {
-               // The previously tossed winner is no longer in the tied group due to data change
             }
         } else {
              winReason = 'Dead Heat - Coin Toss Required';
@@ -146,17 +142,15 @@ export default function FplTieBreaker() {
 
   useEffect(() => {
     calculateWinner();
-  }, [teams]); // Re-run when teams change
+  }, [teams]);
 
-  // Separate effect to handle coin toss result injection
   useEffect(() => {
      calculateWinner();
   }, [coinWinnerIndex]);
 
-
   const handleCoinToss = () => {
     if (!analysis) return;
-    const candidates = analysis.step3.survivors; // Those who survived step 3
+    const candidates = analysis.step3.survivors;
     if (candidates.length < 2) return;
 
     setIsFlipping(true);
@@ -170,8 +164,8 @@ export default function FplTieBreaker() {
 
   const handleReset = () => {
     const defaultTeams = [
-        { id: '', name: 'Team 1', score: '', goals: '', conceded: '', scorers: [], conceders: [] },
-        { id: '', name: 'Team 2', score: '', goals: '', conceded: '', scorers: [], conceders: [] }
+        { id: '', name: 'Team 1', score: '', goals: '', conceded: '', value: '', scorers: [], conceders: [] },
+        { id: '', name: 'Team 2', score: '', goals: '', conceded: '', value: '', scorers: [], conceders: [] }
     ];
     setTeams(defaultTeams);
     setGameweek('');
@@ -188,14 +182,13 @@ export default function FplTieBreaker() {
   const updateTeam = (index, field, value) => {
     const newTeams = [...teams];
     newTeams[index] = { ...newTeams[index], [field]: value };
-    // If data changes, clear coin toss
     setCoinWinnerIndex(null);
     setTeams(newTeams);
   };
 
   const addTeam = () => {
     if (teams.length < 5) {
-        setTeams([...teams, { id: '', name: `Team ${teams.length + 1}`, score: '', goals: '', conceded: '', scorers: [], conceders: [] }]);
+        setTeams([...teams, { id: '', name: `Team ${teams.length + 1}`, score: '', goals: '', conceded: '', value: '', scorers: [], conceders: [] }]);
         setCoinWinnerIndex(null);
     }
   };
@@ -212,7 +205,6 @@ export default function FplTieBreaker() {
   // --- API Fetching Logic ---
 
   const fetchFPLData = async () => {
-    // Filter teams that have an ID
     const activeIndices = teams.map((t, i) => t.id ? i : -1).filter(i => i !== -1);
 
     if (!gameweek || activeIndices.length < 2) {
@@ -296,6 +288,10 @@ export default function FplTieBreaker() {
         const rawPoints = picksData.entry_history.points;
         const transferCost = picksData.entry_history.event_transfers_cost;
         const totalPoints = rawPoints - transferCost;
+        
+        // Calculate Team Value (FPL returns integer e.g. 1025 for 102.5)
+        const rawValue = picksData.entry_history.value;
+        const formattedValue = rawValue ? (rawValue / 10).toFixed(1) : '';
 
         newTeams[index] = {
             ...newTeams[index],
@@ -303,6 +299,7 @@ export default function FplTieBreaker() {
             score: totalPoints,
             goals: totalGoals,
             conceded: totalConceded,
+            value: formattedValue,
             scorers: scorersList,
             conceders: concedersList
         };
@@ -611,6 +608,22 @@ function TeamCard({ index, teamData, updateTeam, removeTeam, canRemove, isWinner
                     placeholder="0"
                 />
             </div>
+            
+            {/* Added Team Value */}
+            <div className="col-span-2 bg-slate-50 p-2 rounded-lg border border-slate-100 flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1">
+                   <Banknote className="h-3 w-3" /> Value (£m)
+                </label>
+                <input 
+                    type="number"
+                    step="0.1" 
+                    min="0"
+                    value={teamData.value}
+                    onChange={(e) => updateTeam(index, 'value', e.target.value)}
+                    className="w-20 bg-transparent text-right text-sm font-bold text-slate-600 focus:outline-none placeholder:text-slate-300"
+                    placeholder="0.0"
+                />
+            </div>
         </div>
       </div>
 
@@ -660,6 +673,21 @@ function TeamCard({ index, teamData, updateTeam, removeTeam, canRemove, isWinner
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function InputGroup({ label, value, onChange, highlight }) {
+  return (
+    <div className="flex items-center justify-between">
+      <label className="text-xs font-medium text-slate-500">{label}</label>
+      <input 
+        type="number" 
+        min="0"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-16 p-1.5 text-right rounded border text-sm ${highlight ? 'border-purple-200 bg-purple-50 text-purple-900 font-bold' : 'border-slate-200 text-slate-700'} focus:ring-1 focus:ring-purple-300 outline-none`}
+      />
     </div>
   );
 }
